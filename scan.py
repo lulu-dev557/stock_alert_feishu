@@ -1,41 +1,51 @@
-import akshare as ak
+import tushare as ts
 import requests
 import os
+import time
 
 def run_scan():
+    token = os.getenv("TUSHARE_TOKEN")
     stock_str = os.getenv("STOCK_LIST", "")
-    codes = [c.strip() for c in stock_str.split(",") if c.strip()]
     webhook = os.getenv("FEISHU_WEBHOOK_URL")
 
+    if not token:
+        print("未配置 TUSHARE_TOKEN")
+        return
+
+    ts.set_token(token)
+    pro = ts.pro_api()
+
+    codes = [c.strip() for c in stock_str.split(",") if c.strip()]
     if not webhook:
         print("未配置 FEISHU_WEBHOOK_URL")
         return
 
     for code in codes:
         try:
-            df = ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
+            time.sleep(0.3)  # 温和限速，防超限
+
+            # ts_code 格式：000903.SZ / 600038.SH
+            ts_code = code + (".SZ" if code.startswith(("0", "3")) else ".SH")
+
+            df = pro.daily(
+                ts_code=ts_code,
                 start_date="20240101",
-                end_date="20990101",
-                adjust="qfq"
+                end_date="20990101"
             )
-            if df.empty or len(df) < 2:
+            if df is None or df.empty:
                 continue
 
-            last = df.iloc[-1]
-            prev_vol = df["成交量"].iloc[-6:-1].mean()
+            last = df.iloc[0]  # pro.daily 默认按日期倒序
+            chg = float(last.get("pct_chg", 0))
+            vol = float(last.get("vol", 0))
+            amount = float(last.get("amount", 0))
 
-            chg = float(last["涨跌幅"])
-            vol = float(last["成交量"])
-            turn = float(last.get("换手率", 0))
-
-            # 异动条件：涨幅>2%、换手>2%、量大于近5日均量1.2倍
-            if chg > 2 and turn > 2 and vol > prev_vol * 1.2:
+            # 简易异动：涨幅>2% 且成交额>5000万（你可改）
+            if chg > 2 and amount > 50000000:
                 msg = {
                     "msg_type": "text",
                     "content": {
-                        "text": f"📈 异动扫描触发\n代码：{code}\n涨幅：{chg:.2f}%\n换手：{turn:.2f}%\n成交量放大"
+                        "text": f"📈 异动扫描触发\n代码：{code}\n涨幅：{chg:.2f}%\n成交额：{amount/1e4:.0f}万"
                     }
                 }
                 r = requests.post(webhook, json=msg, timeout=10)
