@@ -23,4 +23,5 @@ jobs:
         env:
           STOCK_LIST: ${{ secrets.STOCK_LIST }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}  # ✅ 必须完全一致！
         run: python scan.py
