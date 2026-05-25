@@ -55,3 +55,10 @@ def run_scan():
 
 if __name__ == "__main__":
     run_scan()
+
+requests.post(
+    webhook,
+    json={"msg_type": "text", "content": {"text": "✅ 扫描完成，今日无符合异动条件个股"}},
+    timeout=10
+)
+print("发送心跳消息完毕")
